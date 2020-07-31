@@ -1,14 +1,53 @@
 import discord
 from discord.ext import commands
 from configs import general, colors
+from configs.version import VERSION
+from utils import errors
+import traceback
 
 class Events(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error):
+        tb = traceback.format_exception(type(error), error, error.__traceback__)
+        err = [line.rstrip() for line in tb]
+        errstr = '\n'.join(err)
+        if isinstance(error, errors.NotMaster):
+            await ctx.send('마스터만 사용할 수 있습니다.')
+
     @commands.Cog.listener('on_ready')
     async def on_ready(self):
         print('OK')
+        logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
+        embed = discord.Embed(description='**ALL DONE, BOOTED SUCCESSFULLY**', color=colors.PRIMARY)
+        embed.set_footer(text=f'모든 준비 완료, 성공적으로 부팅했습니다 - 버전 {VERSION}')
+        await logch.send(embed=embed)
+
+    @commands.Cog.listener('on_member_join')
+    async def member_join(self, member: discord.Member):
+        channel = self.bot.get_channel(general.IO_CHANNEL)
+        embed = discord.Embed(title=f'{member.name}, 안녕하세요!', color=colors.PRIMARY)
+        if member.bot:
+            embed.description = f'{member.name} 봇이 **GMBT 커뮤니티** 서버에 들어왔습니다!'
+        else:
+            embed.description = f'{member.name} 님 안녕하세요, **GMBT 커뮤니티** 에 오신것을 환영합니다!'
+        count = len(list(filter(lambda x: not x.bot, member.guild.members)))
+        embed.set_footer(text=f'현재 멤버 수: {count}명')
+        await channel.send(embed=embed)
+
+    @commands.Cog.listener('on_member_remove')
+    async def member_remove(self, member: discord.Member):
+        channel = self.bot.get_channel(general.IO_CHANNEL)
+        embed = discord.Embed(title=f'{member.name}, 안녕히가세요-', color=colors.PRIMARY)
+        if member.bot:
+            embed.description = f'{member.name} 봇이 서버를 떠났습니다.'
+        else:
+            embed.description = f'{member.name} 님이 서버를 떠났습니다.'
+        count = len(list(filter(lambda x: not x.bot, member.guild.members)))
+        embed.set_footer(text=f'현재 멤버 수: {count}명')
+        await channel.send(embed=embed)
 
     @commands.Cog.listener('on_raw_reaction_add')
     async def special_channel_role_give(self, payload: discord.RawReactionActionEvent):
@@ -34,7 +73,7 @@ class Events(commands.Cog):
         role = guild.get_role(role_id)
         await member.add_roles(role, reason='특수방 입장에서 정상적으로 역할을 주었습니다.')
 
-        embed = discord.Embed(title='✅ 특수방 역할을 주었습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 추가'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMATY)
+        embed = discord.Embed(title='✅ 특수방 역할을 주었습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 추가'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMARY)
 
         logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
         await logch.send(embed=embed)
@@ -65,7 +104,7 @@ class Events(commands.Cog):
         role: discord.Role = guild.get_role(role_id)
         await member.remove_roles(role, reason='특수방 입장에서 정상적으로 역할을 제거했습니다.')
 
-        embed = discord.Embed(title='🔶 특수방 역할을 제거했습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 제거'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMATY)
+        embed = discord.Embed(title='🔶 특수방 역할을 제거했습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 제거'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMARY)
 
         logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
         await logch.send(embed=embed)
@@ -97,7 +136,7 @@ class Events(commands.Cog):
         role = guild.get_role(role_id)
         await member.add_roles(role, reason='특수방 입장에서 정상적으로 역할을 주었습니다.')
 
-        embed = discord.Embed(title='✅ 특수방 역할을 주었습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 추가'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMATY)
+        embed = discord.Embed(title='✅ 특수방 역할을 주었습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 추가'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMARY)
 
         logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
         await logch.send(embed=embed)
@@ -128,7 +167,7 @@ class Events(commands.Cog):
         role = guild.get_role(role_id)
         await member.remove_roles(role, reason='특수방 입장에서 정상적으로 역할을 제거했습니다.')
 
-        embed = discord.Embed(title='🔶 색역할을 제거했습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 제거'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMATY)
+        embed = discord.Embed(title='🔶 색역할을 제거했습니다', description='{} 유저가 {} 이모지로 반응함\n{} 역할 제거'.format(member.mention, payload.emoji, role.mention), color=colors.PRIMARY)
 
         logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
         await logch.send(embed=embed)
