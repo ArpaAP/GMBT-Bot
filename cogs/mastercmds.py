@@ -3,10 +3,11 @@ from discord.ext import commands
 from utils import checks
 import traceback
 from configs import colors
+from utils.basecog import BaseCog
 
-class Mastercmds(commands.Cog):
+class Mastercmds(BaseCog):
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
         for cmd in self.get_commands():
             cmd.add_check(checks.master_only)
 

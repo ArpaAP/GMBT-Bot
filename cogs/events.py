@@ -3,11 +3,13 @@ from discord.ext import commands
 from configs import general, colors
 from configs.version import VERSION
 from utils import errors
+from utils.basecog import BaseCog
 import traceback
+import aiomysql
 
-class Events(commands.Cog):
+class Events(BaseCog):
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error):
@@ -36,6 +38,15 @@ class Events(commands.Cog):
         count = len(list(filter(lambda x: not x.bot, member.guild.members)))
         embed.set_footer(text=f'현재 멤버 수: {count}명')
         await channel.send(embed=embed)
+
+    @commands.Cog.listener('on_member_join')
+    async def create_data_on_member_join(self, member: discord.Member):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                if not member.bot:
+                    if await cur.execute('select id from userdata where id=%s', member.id) == 0:
+                        await cur.execute('insert into userdata (id) values (%s)', member.id)
+                        self.log.info(f'DB에 새 유저를 등록했습니다: {member.id}')
 
     @commands.Cog.listener('on_member_remove')
     async def member_remove(self, member: discord.Member):
