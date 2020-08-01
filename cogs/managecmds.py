@@ -1,10 +1,11 @@
 import discord
 from discord.ext import commands
-from configs import colors
+from configs import colors, clac
 from utils.basecog import BaseCog
 from typing import Optional
 import aiomysql
 import datetime
+import time
 
 class Managecmds(BaseCog):
     def __init__(self, bot: commands.Bot):
@@ -20,13 +21,15 @@ class Managecmds(BaseCog):
         dt = dt.replace(month=prev)
 
         utc = dt - datetime.timedelta(hours=9)
-        
+
         embed = discord.Embed(title='채팅량 계산', description='{} 의 채팅량을 계산합니다. ({} 부터)\n\n'.format(member.mention, dt.strftime('%Y-%m-%d %X')), color=colors.PRIMARY)
         embed.set_footer(text='아직 계산하고 있습니다...')
         msg = await ctx.send(embed=embed)
 
+        start = time.time()
+
         ls = []
-        for channel in ctx.guild.text_channels:
+        for channel in list(filter(lambda x: x.id in clac.CHAT_COUNT_CHANNELS, ctx.guild.text_channels)):
             embed.set_footer(text='아직 계산하고 있습니다... ({} 계산 중)'.format(channel.name))
             await msg.edit(embed=embed)
             count = 0
@@ -37,7 +40,10 @@ class Managecmds(BaseCog):
             embed.description += '{}: `{}`건\n'.format(channel.mention, count)
 
             await msg.edit(embed=embed)
-        embed.set_footer(text='계산 완료!')
+
+        end = time.time()
+
+        embed.set_footer(text='계산 완료! ({} 초)'.format(end-start))
         embed.description += '**\n총 메시지 수: {} 건**'.format(sum(ls))
         await msg.edit(embed=embed)
         
