@@ -204,6 +204,7 @@ class Managecmds(BaseCog):
 
                 if not warn:
                     await ctx.send('이 ID의 경고를 찾을 수 없습니다. 경고ID가 올바른 지 확인해주세요.')
+                    return
 
                 embed = discord.Embed(title=f'🚨 경고 취소하기', description='이 경고를 취소할까요?', color=colors.WARN)
 
@@ -217,25 +218,26 @@ class Managecmds(BaseCog):
 
                 if not member:
                     await ctx.send('이 경고의 사용자를 찾을 수 없습니다. 유저가 서버에서 나갔을 수 있습니다.')
+                    return
                 
                 embed.add_field(name='대상', value=member.mention)
-                embed.add_field(name='이유', vaule=warn['reason'])
-                embed.add_field(name='횟수', vaule=warn['count'])
-                embed.add_field(name='부여한 시간', vaule=pubtime)
+                embed.add_field(name='이유', value=warn['reason'])
+                embed.add_field(name='횟수', value=warn['count'])
+                embed.add_field(name='부여한 시간', value=pubtime)
                 
                 await ctx.send(embed=embed)
 
                 if warn['count'] == 0:
-                    return
+                    await cur.execute('delete from warns where uuid=%s', warn['uuid'])
 
                 else:
                     await ctx.send('취소할 경고 수를 입력하세요')
                     try:
-                        reaction, user = await self.bot.wait_for('reaction_add', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content and m.content.isdecimal(), timeout=60)
+                        m = await self.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content and m.content.isdecimal(), timeout=60)
                     except asyncio.TimeoutError:
                         pass
                     else:
-                        after = count - int(m.content)
+                        after = warn['count'] - int(m.content)
                         if after == 0:
                             await cur.execute('delete from warns where uuid=%s', warn['uuid'])
                         elif after > 0:

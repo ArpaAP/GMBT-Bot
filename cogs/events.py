@@ -46,7 +46,7 @@ class Events(BaseCog):
         err = [line.rstrip() for line in tb]
         errstr = '\n'.join(err)
         if isinstance(error, errors.NotMaster):
-            await ctx.send('마스터만 사용할 수 있습니다.')
+            await ctx.send('그 명령어는 관리자만 사용할 수 있다 애송아.')
         else:
             print(errstr)
 
