@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from configs import colors, clac
 from utils.basecog import BaseCog
-from utils import checks
+from utils import checks, timedelta
 from utils.converters import Date
 from typing import Optional
 import aiomysql
@@ -139,6 +139,107 @@ class Managecmds(BaseCog):
                 embed.add_field(name='대상 채널', value=chstr)
 
                 await ctx.send(embed=embed)
+
+    @commands.command(name='경고', aliases=['warn'])
+    async def _warn(self, ctx: commands.Context, member: discord.Member, count: Optional[int]=1, *, reason: Optional[str]=None):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                if reason is None:
+                    reasonstr = '(없음)'
+                else:
+                    reasonstr = reason
+                embed = discord.Embed(title='🚨 경고 부여', description='계속하시겠습니까?', color=colors.WARN)
+                embed.add_field(name='대상', value=member.mention)
+                embed.add_field(name='경고 횟수', value=f'{count}회')
+                embed.add_field(name='이유', value=reasonstr)
+                msg = await ctx.send(embed=embed)
+                emjs = [self.emj.get(ctx, 'check'), self.emj.get(ctx, 'cross')]
+                for emj in emjs:
+                    await msg.add_reaction(emj)
+                try:
+                    reaction, user = await self.bot.wait_for('reaction_add', check=lambda r, u: u == ctx.author and r.message.id == msg.id and r.emoji in emjs, timeout=60)
+                except asyncio.TimeoutError:
+                    try:
+                        await msg.clear_reactions()
+                    except:
+                        pass
+                else:
+                    if reaction.emoji == emjs[0]:
+                        await cur.execute(
+                            'insert into warns (uuid, user, count, reason) values (%s, %s, %s, %s)',
+                            (uuid.uuid4().hex, member.id, count, reason)
+                        )
+                        await ctx.send(embed=discord.Embed(title='{} 경고를 부여했습니다'.format(self.emj.get('check')), color=colors.WARN))
+                    else:
+                        try:
+                            await msg.delete()
+                        except:
+                            pass
+
+    @commands.command(name='경고확인', aliases=['경고보기'])
+    async def _warns(self, ctx: commands.Context, member: discord.Member):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute('select * from warns where user=%s order by `dt` desc limit 10', member.id)
+                warns = await cur.fetchall()
+
+                embed = discord.Embed(title=f'🚨 {member} 의 경고 목록', description='최근 10개까지 표시합니다.\n\n', color=colors.WARN)
+
+                for one in warns:
+                    td = datetime.datetime.now() - one['dt']
+                    if td < datetime.timedelta(minutes=1):
+                        pubtime = '방금'
+                    else:
+                        pubtime = list(timedelta.format_timedelta(td).values())[0] + ' 전'
+                    embed.description += '**{}**\n>>> {}회, {}\n경고ID: {}'.format(one['reason'], one['count'], pubtime, one['uuid'])
+
+                await ctx.send(embed=embed)
+
+    @commands.command(name='경고삭제', aliases=['경고취소', '경고제거'])
+    async def _warn_del(self, ctx: commands.Context, uuid):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute('select * from warns where uuid=%s', uuid)
+                warn = await cur.fetchone()
+
+                if not warn:
+                    await ctx.send('이 ID의 경고를 찾을 수 없습니다. 경고ID가 올바른 지 확인해주세요.')
+
+                embed = discord.Embed(title=f'🚨 경고 취소하기', description='이 경고를 취소할까요?', color=colors.WARN)
+
+                td = datetime.datetime.now() - warn['dt']
+                if td < datetime.timedelta(minutes=1):
+                    pubtime = '방금'
+                else:
+                    pubtime = list(timedelta.format_timedelta(td).values())[0] + ' 전'
+
+                member = ctx.guild.get_member(warn['user'])
+
+                if not member:
+                    await ctx.send('이 경고의 사용자를 찾을 수 없습니다. 유저가 서버에서 나갔을 수 있습니다.')
+                
+                embed.add_field(name='대상', value=member.mention)
+                embed.add_field(name='이유', vaule=warn['reason'])
+                embed.add_field(name='횟수', vaule=warn['count'])
+                embed.add_field(name='부여한 시간', vaule=pubtime)
+                
+                await ctx.send(embed=embed)
+
+                if warn['count'] == 0:
+                    return
+
+                else:
+                    await ctx.send('취소할 경고 수를 입력하세요')
+                    try:
+                        reaction, user = await self.bot.wait_for('reaction_add', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content and m.content.isdecimal(), timeout=60)
+                    except asyncio.TimeoutError:
+                        pass
+                    else:
+                        after = count - int(m.content)
+                        if after == 0:
+                            await cur.execute('delete from warns where uuid=%s', warn['uuid'])
+                        elif after > 0:
+                            await cur.execute('update warns set count=%s where uuid=%s', (after, warn['uuid']))
         
 def setup(bot):
     cog = Managecmds(bot)

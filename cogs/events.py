@@ -67,6 +67,9 @@ class Events(BaseCog):
         else:
             embed.description = f'{member.name} 님 안녕하세요, **GMBT 커뮤니티** 에 오신것을 환영합니다!'
         count = len(list(filter(lambda x: not x.bot, member.guild.members)))
+
+        await member.add_roles(*map(lambda x: member.guild.get_role(x), general.JOIN_ROLES))
+
         embed.set_footer(text=f'현재 멤버 수: {count}명')
         await channel.send(embed=embed)
 
