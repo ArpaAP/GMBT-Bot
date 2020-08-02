@@ -11,11 +11,7 @@ class Mastercmds(BaseCog):
         for cmd in self.get_commands():
             cmd.add_check(checks.master_only)
 
-    @commands.command(name='테스트')
-    async def test(self, ctx: commands.Context):
-        await ctx.send('ㅎㅇ')
-
-    @commands.command(name='삭제')
+    @commands.command(name='삭제', aliases=['클리어', '제거', '지우기', '정리'])
     async def delete(self, ctx: commands.Context, count: int):
         await ctx.channel.purge(limit=count)
 

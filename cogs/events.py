@@ -1,15 +1,44 @@
 import discord
 from discord.ext import commands
-from configs import general, colors
+from configs import general, colors, clac
 from configs.version import VERSION
 from utils import errors
 from utils.basecog import BaseCog
 import traceback
 import aiomysql
+import uuid
+import datetime
 
 class Events(BaseCog):
     def __init__(self, bot: commands.Bot):
         super().__init__(bot)
+        self.cooldown = {}
+
+    @commands.Cog.listener('on_message')
+    async def insert_message(self, message: discord.Message):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                if message.author.bot:
+                    return
+                if message.channel.id not in clac.CHAT_COUNT_CHANNELS:
+                    return
+                await cur.execute('insert into messages (uuid, user, guild, channel, message) values (%s, %s, %s, %s, %s)', (uuid.uuid4().hex, message.author.id, message.guild.id, message.channel.id, message.id))
+
+    @commands.Cog.listener('on_message')
+    async def give_exp(self, message: discord.Message):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                cld = 60
+                now = datetime.datetime.now()
+                cooldown: datetime.datetime = self.cooldown.get(message.author.id)
+                if cooldown is None:
+                    pass
+                elif cooldown + datetime.timedelta(seconds=60) <= now:
+                    pass
+                else:
+                    return
+                self.cooldown[message.author.id] = now
+                await cur.execute('update userdata set exp=exp+1 where id=%s', message.author.id)
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error):
@@ -18,6 +47,8 @@ class Events(BaseCog):
         errstr = '\n'.join(err)
         if isinstance(error, errors.NotMaster):
             await ctx.send('마스터만 사용할 수 있습니다.')
+        else:
+            print(errstr)
 
     @commands.Cog.listener('on_ready')
     async def on_ready(self):

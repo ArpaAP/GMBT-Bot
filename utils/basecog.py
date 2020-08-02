@@ -13,6 +13,7 @@ class BaseCog(commands.Cog):
         self.log: logging.Logger = bot.datas.get('log')
         self.datadb: DataDB = bot.datas.get('datadb')
         self.emj: Emoji = bot.datas.get('emj')
+        self.prefix = bot.command_prefix
 
     def getlistener(self, name):
         listeners = self.bot.get_cog(self.eventcogname).get_listeners()

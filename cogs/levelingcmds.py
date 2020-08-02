@@ -43,6 +43,29 @@ class Levelingcmds(BaseCog):
                 ))
                 await ctx.send(embed=embed)
 
+    @commands.command(name='순위', aliases=['랭킹', '순', '랭', '랭크', '경험치순위', '레벨순위', '경험치랭킹'])
+    async def _rank(self, ctx: commands.Context):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                edgr = ExpTableDBMgr(self.datadb)
+                embed = discord.Embed(title='🏆 경험치 순위표', description='', color=colors.PRIMARY)
+                await cur.execute('select * from userdata order by `exp` desc limit 10')
+                ls = await cur.fetchall()
+                for idx, value in enumerate(ls, 1):
+                    member = ctx.guild.get_member(value['id'])
+                    if not member:
+                        continue
+                    if idx == 1:
+                        idxstr = '🥇'
+                    elif idx == 2:
+                        idxstr = '🥈'
+                    elif idx == 3:
+                        idxstr = '🥉'
+                    else:
+                        idxstr = f'{idx}.'
+                    embed.description += '**{} {}**\n> 레벨 **{}** 경험치 `{}`\n'.format(idxstr, member.mention, edgr.clac_level(value['exp']), value['exp'])
+                await ctx.send(embed=embed)
+
 def setup(bot):
     cog = Levelingcmds(bot)
     bot.add_cog(cog)
