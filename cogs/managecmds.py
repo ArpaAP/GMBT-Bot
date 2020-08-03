@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands
-from configs import colors, clac
+from configs import colors, clac, masters
 from utils.basecog import BaseCog
-from utils import checks, timedelta
+from utils import checks, timedelta, emojibuttons, event_waiter
 from utils.converters import Date
+from utils.pager import Pager
 from typing import Optional
 import aiomysql
 import asyncio
@@ -11,12 +12,13 @@ import datetime
 import time
 import math
 import uuid
+from templates import manageembeds
 
 class Managecmds(BaseCog):
     def __init__(self, bot: commands.Bot):
         super().__init__(bot)
         for cmd in self.get_commands():
-            if cmd.name == '동기화':
+            if cmd.name in ['동기화', '경고', '경고삭제']:
                 cmd.add_check(checks.master_only)
 
     @commands.command(name='동기화')
@@ -141,7 +143,11 @@ class Managecmds(BaseCog):
                 await ctx.send(embed=embed)
 
     @commands.command(name='경고', aliases=['warn'])
-    async def _warn(self, ctx: commands.Context, member: discord.Member, count: Optional[int]=1, *, reason: Optional[str]=None):
+    async def _warn(self, ctx: commands.Context, member: Optional[discord.Member]=None, *, reason: Optional[str]=None):
+        if not member:
+            await self._warns(ctx)
+            return
+
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 if reason is None:
@@ -150,8 +156,7 @@ class Managecmds(BaseCog):
                     reasonstr = reason
                 embed = discord.Embed(title='🚨 경고 부여', description='계속하시겠습니까?', color=colors.WARN)
                 embed.add_field(name='대상', value=member.mention)
-                embed.add_field(name='경고 횟수', value=f'{count}회')
-                embed.add_field(name='이유', value=reasonstr)
+                embed.add_field(name='사유', value=reasonstr)
                 msg = await ctx.send(embed=embed)
                 emjs = [self.emj.get(ctx, 'check'), self.emj.get(ctx, 'cross')]
                 for emj in emjs:
@@ -166,82 +171,120 @@ class Managecmds(BaseCog):
                 else:
                     if reaction.emoji == emjs[0]:
                         await cur.execute(
-                            'insert into warns (uuid, user, count, reason) values (%s, %s, %s, %s)',
-                            (uuid.uuid4().hex, member.id, count, reason)
+                            'insert into warns (uuid, user, reason, byuser) values (%s, %s, %s, %s)',
+                            (uuid.uuid4().hex, member.id, reason, ctx.author.id)
                         )
-                        await ctx.send(embed=discord.Embed(title='{} 경고를 부여했습니다'.format(self.emj.get('check')), color=colors.WARN))
+                        await ctx.send(embed=discord.Embed(title='{} 경고를 부여했습니다'.format(self.emj.get(ctx, 'check')), color=colors.WARN))
+                        lsnr = self.getlistener('on_warn')
+                        await lsnr(member)
                     else:
                         try:
                             await msg.delete()
                         except:
                             pass
 
-    @commands.command(name='경고확인', aliases=['경고보기'])
-    async def _warns(self, ctx: commands.Context, member: discord.Member):
+    @commands.command(name='경고확인', aliases=['경고보기', '경고목록', '경고들', '내경고'])
+    async def _warns(self, ctx: commands.Context, member: Optional[discord.Member]=None):
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute('select * from warns where user=%s order by `dt` desc limit 10', member.id)
-                warns = await cur.fetchall()
-
-                embed = discord.Embed(title=f'🚨 {member} 의 경고 목록', description='최근 10개까지 표시합니다.\n\n', color=colors.WARN)
-
-                for one in warns:
-                    td = datetime.datetime.now() - one['dt']
-                    if td < datetime.timedelta(minutes=1):
-                        pubtime = '방금'
-                    else:
-                        pubtime = list(timedelta.format_timedelta(td).values())[0] + ' 전'
-                    embed.description += '**{}**\n>>> {}회, {}\n경고ID: {}'.format(one['reason'], one['count'], pubtime, one['uuid'])
-
-                await ctx.send(embed=embed)
-
-    @commands.command(name='경고삭제', aliases=['경고취소', '경고제거'])
-    async def _warn_del(self, ctx: commands.Context, uuid):
-        async with self.pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute('select * from warns where uuid=%s', uuid)
-                warn = await cur.fetchone()
-
-                if not warn:
-                    await ctx.send('이 ID의 경고를 찾을 수 없습니다. 경고ID가 올바른 지 확인해주세요.')
-                    return
-
-                embed = discord.Embed(title=f'🚨 경고 취소하기', description='이 경고를 취소할까요?', color=colors.WARN)
-
-                td = datetime.datetime.now() - warn['dt']
-                if td < datetime.timedelta(minutes=1):
-                    pubtime = '방금'
-                else:
-                    pubtime = list(timedelta.format_timedelta(td).values())[0] + ' 전'
-
-                member = ctx.guild.get_member(warn['user'])
-
                 if not member:
-                    await ctx.send('이 경고의 사용자를 찾을 수 없습니다. 유저가 서버에서 나갔을 수 있습니다.')
+                    member = ctx.author
+
+                if await cur.execute('select * from warns where user=%s order by `dt` desc limit 10', member.id) == 0:
+                    await ctx.send(f'{member} 가 받은 경고가 하나도 없습니다! 👍')
                     return
-                
-                embed.add_field(name='대상', value=member.mention)
-                embed.add_field(name='이유', value=warn['reason'])
-                embed.add_field(name='횟수', value=warn['count'])
-                embed.add_field(name='부여한 시간', value=pubtime)
-                
-                await ctx.send(embed=embed)
 
-                if warn['count'] == 0:
-                    await cur.execute('delete from warns where uuid=%s', warn['uuid'])
+                warns = await cur.fetchall()
+                pgr = Pager(warns, 5)
+                msg = await ctx.send(embed=manageembeds.warns_embed(self, pgr, member=member))
 
+                ismaster = ctx.author.id in masters.MASTERS
+                if ismaster:
+                    extemjs = ['❌']
                 else:
-                    await ctx.send('취소할 경고 수를 입력하세요')
-                    try:
-                        m = await self.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content and m.content.isdecimal(), timeout=60)
-                    except asyncio.TimeoutError:
-                        pass
+                    extemjs = []
+                emjs = emojibuttons.PageButton.emojis + extemjs
+                async def addreaction(m):
+                    if len(pgr.pages()) == 0:
+                        return
+                    elif len(pgr.pages()) <= 1:
+                        for emj in extemjs:
+                            await m.add_reaction(emj)
                     else:
-                        after = warn['count'] - int(m.content)
-                        if after == 0:
-                            await cur.execute('delete from warns where uuid=%s', warn['uuid'])
-                        elif after > 0:
-                            await cur.execute('update warns set count=%s where uuid=%s', (after, warn['uuid']))
+                        for emj in emjs:
+                            await m.add_reaction(emj)
+                await addreaction(msg)
+
+                def check(reaction, user):
+                    return user == ctx.author and msg.id == reaction.message.id and reaction.emoji in emjs
+                while True:
+                    try:
+                        reaction, user = await self.bot.wait_for('reaction_add', check=check, timeout=60*5)
+                    except asyncio.TimeoutError:
+                        try:
+                            await msg.clear_reactions()
+                        except:
+                            pass
+                    else:
+                        if reaction.emoji in extemjs:
+                            if not ctx.channel.last_message or ctx.channel.last_message_id == msg.id:
+                                await msg.edit(embed=manageembeds.warns_embed(self, pgr, member=member, mode='select'))
+                            else:
+                                results = await asyncio.gather(
+                                    msg.delete(),
+                                    ctx.send(embed=manageembeds.warns_embed(self, pgr, member=member, mode='select'))
+                                )
+                                msg = results[1]
+                                await addreaction(msg)
+                                reaction.message = msg
+
+                        if reaction.emoji == '❌' and ismaster:
+                            allcancel = ['모두', '전부']
+                            itemidxmsg = await ctx.send(embed=discord.Embed(
+                                title='🚨 경고 취소하기 - 취소할 경고 선택',
+                                description='취소할 경고의 번째수를 입력해주세요. (모두 취소하려면 `전부` 또는 `모두` 입력)\n위 메시지에 경고 앞마다 번호가 붙어 있습니다.\n❌를 클릭해 취소합니다.',
+                                color=colors.WARN
+                            ))
+                            await itemidxmsg.add_reaction('❌')
+                            canceltask = asyncio.create_task(event_waiter.wait_for_reaction(self.bot, ctx=ctx, msg=itemidxmsg, emojis=['❌'], timeout=60))
+                            indextask = asyncio.create_task(event_waiter.wait_for_message(self.bot, ctx=ctx, timeout=60, subcheck=lambda m: m.content.isdecimal() or m.content in allcancel))
+                            task = await event_waiter.wait_for_first(canceltask, indextask)
+                            await itemidxmsg.delete()
+
+                            if task == indextask:
+                                idxtaskrst = indextask.result()
+                                if idxtaskrst.content in allcancel:
+                                    await cur.execute('delete from warns where user=%s', member.id)
+                                    lsnr = self.getlistener('on_warn')
+                                    await lsnr(member)
+                                else:
+                                    idx = int(idxtaskrst.content)
+                                    if 1 <= idx <= len(pgr.get_thispage()):
+                                        delwarn = pgr.get_thispage()[idx-1]
+                                        await cur.execute('delete from warns where uuid=%s', delwarn['uuid'])
+                                        await ctx.send(embed=discord.Embed(title='{} 경고를 풀었습니다!'.format(self.emj.get(ctx, 'check')), color=colors.SUCCESS))
+                                        lsnr = self.getlistener('on_warn')
+                                        await lsnr(ctx.guild.get_member(delwarn['user']))
+                                    else:
+                                        embed = discord.Embed(title='❓ 경고 번째수가 올바르지 않습니다!', description='위 메시지에 경고 앞마다 번호가 붙어 있습니다.', color=colors.ERROR)
+                                        embed.set_footer(text='이 메시지는 7초 후에 사라집니다')
+                                        await ctx.send(embed=embed, delete_after=7)
+                        
+                        if await cur.execute('select * from warns where user=%s order by `dt` desc limit 10', member.id) == 0:
+                            await msg.edit(content=f'{member} 가 받은 경고가 하나도 없습니다! 👍', embed=None)
+                            try:
+                                await msg.clear_reactions()
+                            except:
+                                pass
+                            return
+                        else:
+                            pgr.set_obj(await cur.fetchall())
+
+                        do = await emojibuttons.PageButton.buttonctrl(reaction, user, pgr, double=5)
+                        if asyncio.iscoroutine(do):
+                            await asyncio.gather(do,
+                                msg.edit(embed=manageembeds.warns_embed(self, pgr, member=member)),
+                            )
         
 def setup(bot):
     cog = Managecmds(bot)

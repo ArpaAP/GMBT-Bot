@@ -14,6 +14,25 @@ class Events(BaseCog):
         super().__init__(bot)
         self.cooldown = {}
 
+    @commands.Cog.listener('on_warn')
+    async def on_warn(self, member: discord.Member):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
+                warncount = await cur.execute('select uuid from warns where user=%s', member.id)
+                roles = list(filter(lambda a: a is not None, map(lambda x: member.guild.get_role(x), general.WARN_ROLES)))
+
+                # 30분 내에 경고를 3개 받을 시 밴 한다.
+                if await cur.execute('select uuid from warns where user=%s and dt >= %s', (member.id, datetime.datetime.now() - datetime.timedelta(minutes=30))) >= 3:
+                    await member.ban(reason='30분동안 3개의 경고를 받아 자동 차단 되었습니다.', delete_message_days=0)
+                    await logch.send(embed=discord.Embed(title=f'`{member}` 님이 밴선수리검을 맞았습니다!', description='30분동안 3개의 경고를 받아 자동 차단됨', color=colors.PRIMARY))
+                    return
+
+                if warncount >= general.ROLE_GIVE_WARN_COUNT:
+                    await member.add_roles(*roles)
+                else:
+                    await member.remove_roles(*roles)
+
     @commands.Cog.listener('on_message')
     async def insert_message(self, message: discord.Message):
         async with self.pool.acquire() as conn:
