@@ -6,11 +6,13 @@ from utils import checks, timedelta, emojibuttons, event_waiter
 from utils.converters import Date
 from utils.pager import Pager
 from typing import Optional
+import os
 import aiomysql
 import asyncio
 import datetime
 import time
 import math
+import platform
 import uuid
 from templates import manageembeds
 
@@ -18,7 +20,7 @@ class Managecmds(BaseCog):
     def __init__(self, bot: commands.Bot):
         super().__init__(bot)
         for cmd in self.get_commands():
-            if cmd.name in ['동기화', '경고', '경고삭제']:
+            if cmd.name in ['동기화', '경고', '석방타이머']:
                 cmd.add_check(checks.master_only)
 
     @commands.command(name='동기화')
@@ -285,6 +287,40 @@ class Managecmds(BaseCog):
                             await asyncio.gather(do,
                                 msg.edit(embed=manageembeds.warns_embed(self, pgr, member=member)),
                             )
+
+    @commands.command(name='형량', aliases=['탬프'])
+    async def _release_timer(self, ctx: commands.Context, member: discord.Member, minutes: Optional[int]):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                embed = discord.Embed(
+                    title='⏱ 형량 설정',
+                    description='멤버의 형량을 설정합니다. 설정하는 즉시 타이머가 시작되며, 타이머가 끝나면 자동으로 죄수 역할을 제거합니다.\n현재 죄수인 멤버만 효과가 있습니다.\n\n**계속할까요?**',
+                    color=colors.WARN
+                )
+                embed.add_field(name='시간(분)', value=f'{minutes} 분')
+                msg = await ctx.send(embed=embed)
+                emjs = [self.emj.get(ctx, 'check'), self.emj.get(ctx, 'cross')]
+                for emj in emjs:
+                    await msg.add_reaction(emj)
+                try:
+                    reaction, user = await self.bot.wait_for('reaction_add', check=lambda r, u: u == ctx.author and r.message.id == msg.id and r.emoji in emjs, timeout=60)
+                except asyncio.TimeoutError:
+                    try:
+                        await msg.clear_reactions()
+                    except:
+                        pass
+                else:
+                    if reaction.emoji == emjs[0]:
+                        await cur.execute(
+                            'insert into `release_timer` (uuid, user, minutes) values (%s, %s, %s)',
+                            (uuid.uuid4().hex, member.id, minutes)
+                        )
+                        await ctx.send(embed=discord.Embed(title='{} 형량을 설정했습니다'.format(self.emj.get(ctx, 'check')), color=colors.SUCCESS))
+                    else:
+                        try:
+                            await msg.delete()
+                        except:
+                            pass
         
 def setup(bot):
     cog = Managecmds(bot)

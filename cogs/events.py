@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from configs import general, colors, clac
+from configs import general, colors, clac, masters
 from configs.version import VERSION
 from utils import errors
 from utils.basecog import BaseCog
@@ -20,10 +20,10 @@ class Events(BaseCog):
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 logch = self.bot.get_channel(general.LOG_CHANNEL_ID)
                 warncount = await cur.execute('select uuid from warns where user=%s', member.id)
-                roles = list(filter(lambda a: a is not None, map(lambda x: member.guild.get_role(x), general.WARN_ROLES)))
+                roles = list(filter(lambda a: a is not None, map(member.guild.get_role, general.WARN_ROLES)))
 
                 # 30분 내에 경고를 3개 받을 시 밴 한다.
-                if await cur.execute('select uuid from warns where user=%s and dt >= %s', (member.id, datetime.datetime.now() - datetime.timedelta(minutes=30))) >= 3:
+                if member.id not in masters.MASTERS and await cur.execute('select uuid from warns where user=%s and dt >= %s', (member.id, datetime.datetime.now() - datetime.timedelta(minutes=30))) >= 3:
                     await member.ban(reason='30분동안 3개의 경고를 받아 자동 차단 되었습니다.', delete_message_days=0)
                     await logch.send(embed=discord.Embed(title=f'`{member}` 님이 밴선수리검을 맞았습니다!', description='30분동안 3개의 경고를 받아 자동 차단됨', color=colors.PRIMARY))
                     return
@@ -87,7 +87,7 @@ class Events(BaseCog):
             embed.description = f'{member.name} 님 안녕하세요, **GMBT 커뮤니티** 에 오신것을 환영합니다!'
         count = len(list(filter(lambda x: not x.bot, member.guild.members)))
 
-        await member.add_roles(*map(lambda x: member.guild.get_role(x), general.JOIN_ROLES))
+        await member.add_roles(*map(member.guild.get_role, general.JOIN_ROLES))
 
         embed.set_footer(text=f'현재 멤버 수: {count}명')
         await channel.send(embed=embed)
