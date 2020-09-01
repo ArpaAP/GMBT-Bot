@@ -61,7 +61,10 @@ class Events(BaseCog):
         err = [line.rstrip() for line in tb]
         errstr = '\n'.join(err)
         if isinstance(error, errors.NotMaster):
-            await ctx.send('그 명령어는 관리자만 사용할 수 있다 애송아.')
+            await ctx.send('그 명령어는 개발자만 사용할 수 있다 애송아.')
+        elif isinstance(error, commands.MissingPermissions):
+            if 'administrator' in error.missing_perms:
+                await ctx.send('그 명령어는 서버 관리자만 사용할 수 있습니다 ㅋ')
         else:
             print(errstr)
 

@@ -321,6 +321,32 @@ class Managecmds(BaseCog):
                             await msg.delete()
                         except:
                             pass
+
+    @commands.command(name='닉고정')
+    
+    async def _nick_pin(self, ctx, member: discord.Member, name):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                if ctx.author.id in masters.MASTERS or ctx.author.permissions_in(ctx.channel).administrator:
+                    await cur.execute('insert into nickpin (uuid, guild, member, value) values (%s, %s, %s, %s)', (
+                        uuid.uuid4().hex, ctx.guild.id, member.id, name
+                    ))
+                    await ctx.send(f'{member} 님의 닉이 `{name}`으로 고정됬습니다. `{self.prefix}닉고정해제`로 푸세요')
+                else:
+                    await ctx.send('관리자 또는 개발자가 아님')
+
+    @commands.command(name='닉고정해제')
+    
+    async def _nick_unpin(self, ctx, member: discord.Member):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                if ctx.author.id in masters.MASTERS or ctx.author.permissions_in(ctx.channel).administrator:
+                    if await cur.execute('delete from nickpin where guild=%s and member=%s', (ctx.guild.id, member.id)):
+                        await ctx.send(f'{member} 님의 닉고정을 해제했습니다')
+                    else:
+                        await ctx.send('이미 닉이 고정되어있지 않습니다')
+                else:
+                    await ctx.send('관리자 또는 개발자가 아님')
         
 def setup(bot):
     cog = Managecmds(bot)
