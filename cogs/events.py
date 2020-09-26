@@ -31,7 +31,7 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_message')
     async def insert_message(self, message: discord.Message):
-        if member.guild.id != general.MASTER_GUILD_ID:
+        if message.guild.id != general.MASTER_GUILD_ID:
             return
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -43,7 +43,7 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_message')
     async def give_exp(self, message: discord.Message):
-        if member.guild.id != general.MASTER_GUILD_ID:
+        if message.guild.id != general.MASTER_GUILD_ID:
             return
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
