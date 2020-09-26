@@ -31,6 +31,8 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_message')
     async def insert_message(self, message: discord.Message):
+        if member.guild.id != general.MASTER_GUILD_ID:
+            return
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 if message.author.bot:
@@ -41,6 +43,8 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_message')
     async def give_exp(self, message: discord.Message):
+        if member.guild.id != general.MASTER_GUILD_ID:
+            return
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 cld = 60
@@ -78,6 +82,8 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_member_join')
     async def member_join(self, member: discord.Member):
+        if member.guild.id != general.MASTER_GUILD_ID:
+            return
         channel = self.bot.get_channel(general.IO_CHANNEL)
         embed = discord.Embed(title=f'{member.name}, 안녕하세요!', color=colors.PRIMARY)
         if member.bot:
@@ -93,6 +99,8 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_member_join')
     async def create_data_on_member_join(self, member: discord.Member):
+        if member.guild.id != general.MASTER_GUILD_ID:
+            return
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 if not member.bot:
@@ -102,6 +110,8 @@ class Events(BaseCog):
 
     @commands.Cog.listener('on_member_remove')
     async def member_remove(self, member: discord.Member):
+        if member.guild.id != general.MASTER_GUILD_ID:
+            return
         channel = self.bot.get_channel(general.IO_CHANNEL)
         embed = discord.Embed(title=f'{member.name}, 안녕히가세요-', color=colors.PRIMARY)
         if member.bot:
