@@ -13,7 +13,7 @@ from utils import emojictrl
 from db import exptable
 import importlib
 
-bot = GMBTBot(command_prefix='g!')
+bot = GMBTBot(command_prefix='g!', intents=discord.Intents.all())
 
 reqdirs = ['./logs', './logs/gmbt', './logs/discord']
 for dit in reqdirs:
