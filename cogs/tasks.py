@@ -22,7 +22,6 @@ class Tasks(BaseCog):
         self.presence_loop.start()
         self.sync_user.start()
         self.release_jail.start()
-        self.nick_pin.start()
 
     @tasks.loop(seconds=8)
     async def update_server_user_count(self):
@@ -105,13 +104,11 @@ class Tasks(BaseCog):
         self.presence_loop.cancel()
         self.sync_user.cancel()
         self.release_jail.cancel()
-        self.nick_pin()
 
     @release_jail.before_loop
     @update_server_user_count.before_loop
     @presence_loop.before_loop
     @sync_user.before_loop
-    @nick_pin.before_loop
     async def before_loop(self):
         await self.bot.wait_until_ready()
 
